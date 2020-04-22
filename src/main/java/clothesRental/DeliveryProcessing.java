@@ -22,6 +22,7 @@ public class DeliveryProcessing {
         DeliveryStarted deliveryStarted = new DeliveryStarted();
         BeanUtils.copyProperties(this, deliveryStarted);
         deliveryStarted.publish();
+        System.out.println("배송 시작");
 
 
     }
@@ -31,6 +32,7 @@ public class DeliveryProcessing {
         DeliveryCanceled deliveryCanceled = new DeliveryCanceled();
         BeanUtils.copyProperties(this, deliveryCanceled);
         deliveryCanceled.publish();
+        System.out.println("배송 취소");
 
 
     }

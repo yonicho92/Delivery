@@ -23,8 +23,8 @@ public class PolicyHandler{
 
             //deliveryProcessing.setStatus("Delivery Start");
 
-            deliveryProcessing.setStatus(paymentSuccess.getEventType());
-
+//            deliveryProcessing.setStatus(paymentSuccess.getEventType());
+            deliveryProcessing.setStatus("배송시작시작시작");
 
             deliveryProcessing.setId(paymentSuccess.getId());
             deliveryProcessing.setOrderId(paymentSuccess.getOrderId());
