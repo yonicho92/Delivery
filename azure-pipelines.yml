@@ -1,5 +1,5 @@
-# Deploy to Azure Kubernetes Service
-# Build and push image to Azure Container Registry; Deploy to Azure Kubernetes Service
+# Docker
+# Build and push an image to Azure Container Registry
 # https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
@@ -9,123 +9,60 @@ resources:
 - repo: self
 
 variables:
-- group: common-value
-  # containerRegistry: 'event.azurecr.io'
-  # containerRegistryDockerConnection: 'acr'
-  # environment: 'aks.default'
-- name: imageRepository
-  value: 'Delivery'
-- name: dockerfilePath
-  value: '**/Dockerfile'
-- name: tag
-  value: '$(Build.BuildId)'
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: '9ed3d330-821a-4657-9a3b-8771c12ac714'
+  imageRepository: 'Delivery'
+  containerRegistry: 'adm20acr.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+  
   # Agent VM image name
-- name: vmImageName
-  value: 'ubuntu-latest'
-- name: MAVEN_CACHE_FOLDER
-  value: $(Pipeline.Workspace)/.m2/repository
-- name: MAVEN_OPTS
-  value: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
-
+  vmImageName: 'ubuntu-latest'
 
 stages:
 - stage: Build
-  displayName: Build stage
-  jobs:
+  displayName: Build and push stage
+  jobs:  
   - job: Build
     displayName: Build
     pool:
       vmImage: $(vmImageName)
     steps:
-    - task: CacheBeta@1
-      inputs:
-        key: 'maven | "$(Agent.OS)" | **/pom.xml'
-        restoreKeys: |
-           maven | "$(Agent.OS)"
-           maven
-        path: $(MAVEN_CACHE_FOLDER)
-      displayName: Cache Maven local repo
     - task: Maven@3
       inputs:
         mavenPomFile: 'pom.xml'
-        options: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
         javaHomeOption: 'JDKVersion'
-        jdkVersionOption: '1.8'
-        jdkArchitectureOption: 'x64'
-        goals: 'package'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: '$(system.defaultworkingdirectory)'
+        Contents: |
+          **/*.jar
+          Dockerfile
+          kubernetes/*
+        TargetFolder: '$(build.artifactstagingdirectory)'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
     - task: Docker@2
       inputs:
-        containerRegistry: $(containerRegistryDockerConnection)
-        repository: $(imageRepository)
+        containerRegistry: 'adm20acr'
+        repository: 'Delivery'
         command: 'buildAndPush'
         Dockerfile: '**/Dockerfile'
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
-
-- stage: Deploy
-  displayName: Deploy stage
-  dependsOn: Build
-
-  jobs:
-  - deployment: Deploy
-    displayName: Deploy
-    pool:
-      vmImage: $(vmImageName)
-    environment: $(environment)
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: Kubernetes@1
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              namespace: 'default'
-              command: 'apply'
-              useConfigurationFile: true
-              configurationType: 'inline'
-              inline: |
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: $(imageRepository)
-                  labels:
-                    app: $(imageRepository)
-                spec:
-                  replicas: 1
-                  selector:
-                    matchLabels:
-                      app: $(imageRepository)
-                  template:
-                    metadata:
-                      labels:
-                        app: $(imageRepository)
-                    spec:
-                      containers:
-                        - name: $(imageRepository)
-                          image: $(containerRegistry)/$(imageRepository):$(tag)
-                          ports:
-                            - containerPort: 8080
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
-          - task: Kubernetes@1
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              namespace: 'default'
-              command: 'apply'
-              useConfigurationFile: true
-              configurationType: 'inline'
-              inline: |
-                apiVersion: v1
-                kind: Service
-                metadata:
-                  name: $(imageRepository)
-                  labels:
-                    app: $(imageRepository)
-                spec:
-                  ports:
-                    - port: 8080
-                      targetPort: 8080
-                  selector:
-                    app: $(imageRepository)
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Azure Container Registry'
