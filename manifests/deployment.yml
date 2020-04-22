@@ -1,0 +1,16 @@
+apiVersion : apps/v1beta1
+kind: Deployment
+metadata:
+  name: yonichodelivery 
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: yonichodelivery 
+    spec:
+      containers:
+        - name: yonichodelivery 
+          image: adm20acr.azurecr.io/yonichodelivery
+          ports:
+          - containerPort: 8080
